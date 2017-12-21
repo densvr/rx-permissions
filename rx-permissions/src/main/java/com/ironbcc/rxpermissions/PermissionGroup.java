@@ -10,6 +10,7 @@ public enum PermissionGroup {
     CAMERA("android.permission.CAMERA"),
     CONTACTS("android.permission.READ_CONTACTS"),
     LOCATION("android.permission.ACCESS_COARSE_LOCATION"),
+    FINE_LOCATION("android.permission.ACCESS_FINE_LOCATION"),
     MICROPHONE("android.permission.RECORD_AUDIO"),
     PHONE("android.permission.READ_PHONE_STATE"),
     SENSORS("android.permission.BODY_SENSORS"),
