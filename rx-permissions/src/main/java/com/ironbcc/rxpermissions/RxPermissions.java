@@ -12,7 +12,7 @@ import rx.Observable;
 import rx.functions.*;
 import rx.subjects.PublishSubject;
 
-import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 
@@ -23,18 +23,28 @@ public class RxPermissions {
 
     @NonNull
     public static Observable<Boolean> observe(final Context context, final PermissionGroup permissions) {
+        return observe(context, Collections.singletonList(permissions));
+    }
+
+    @NonNull
+    public static Observable<Boolean> observe(final Context context, final List<PermissionGroup> permissions) {
         return Observable.defer(new Func0<Observable<Boolean>>() {
             @Override
             public Observable<Boolean> call() {
-                return Observable.just(isGranted(context, permissions));
+                return Observable.just(areGranted(context, permissions));
             }
         });
     }
 
     @NonNull
     public static Observable<Boolean> request(final Activity activity, final PermissionGroup permissions) {
+        return request(activity, Collections.singletonList(permissions));
+    }
+
+    @NonNull
+    public static Observable<Boolean> request(final Activity activity, final List<PermissionGroup> permissions) {
         return observe(activity, permissions)
-            .flatMap(new Func1<Boolean, Observable<Boolean>>() {
+                .flatMap(new Func1<Boolean, Observable<Boolean>>() {
                     @Override
                     public Observable<Boolean> call(Boolean granted) {
                         if (!granted) {
@@ -95,16 +105,29 @@ public class RxPermissions {
         return ContextCompat.checkSelfPermission(context, permission.getValue()) == PackageManager.PERMISSION_GRANTED;
     }
 
+    public static boolean areGranted(Context context, List<PermissionGroup> permissions) {
+        for (PermissionGroup permission: permissions) {
+            if (!isGranted(context, permission)) return false;
+        }
+        return true;
+    }
+
     @NonNull
-    private static Observable<Boolean> schedulePermissionsRequest(final Activity activity, final PermissionGroup permissions) {
+    private static Observable<Boolean> schedulePermissionsRequest(final Activity activity, final List<PermissionGroup> permissions) {
         final int requestCode = getRequestCode();
         final PublishSubject<Boolean> subj = PublishSubject.create();
         requestMap.put(requestCode, subj);
 
+        final String[] p = new String[permissions.size()];
+
+        for (int i = 0; i < permissions.size(); i++) {
+            p[i] = permissions.get(i).getValue();
+        }
+
         return subj.doOnSubscribe(new Action0() {
             @Override
             public void call() {
-                ActivityCompat.requestPermissions(activity, new String[] {permissions.getValue()}, requestCode);
+                ActivityCompat.requestPermissions(activity, p, requestCode);
             }
         });
     }
@@ -113,11 +136,14 @@ public class RxPermissions {
     public static boolean onRequestPermissionsResult(int requestCode, String permissions[], int[] grantResults) {
         final PublishSubject<Boolean> publishSubject = requestMap.get(requestCode);
         if(publishSubject == null) return false;
-        if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-            publishSubject.onNext(true);
-        } else {
-            publishSubject.onNext(false);
+        for (int result : grantResults) {
+            if (result == PackageManager.PERMISSION_DENIED) {
+                publishSubject.onNext(false);
+                releaseRequestCode(requestCode);
+                return true;
+            }
         }
+        publishSubject.onNext(true);
         releaseRequestCode(requestCode);
         return true;
     }
